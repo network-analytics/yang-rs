@@ -559,9 +559,11 @@ impl<'a> DataTree<'a> {
         format: DataFormat,
         parser_options: DataParserFlags,
         validation_options: DataValidationFlags,
+        anchor: Option<&str>,
     ) -> Result<DataTree<'a>> {
         let mut rnode = std::ptr::null_mut();
         let rnode_ptr = &mut rnode;
+        let anchor = anchor.map(|anchor| CString::new(anchor).unwrap());
 
         // Create input handler.
         let cdata;
@@ -581,7 +583,7 @@ impl<'a> DataTree<'a> {
         }
 
         let ret = unsafe {
-            ffi::lyd_parse_data(
+            ffi::lyd_parse_data_with_anchor(
                 context.raw,
                 std::ptr::null_mut(),
                 ly_in,
@@ -589,6 +591,7 @@ impl<'a> DataTree<'a> {
                 parser_options.bits(),
                 validation_options.bits(),
                 rnode_ptr,
+                anchor.as_ref().map_or(std::ptr::null(), |a| a.as_ptr()),
             )
         };
         unsafe { ffi::ly_in_free(ly_in, 0) };
@@ -614,6 +617,35 @@ impl<'a> DataTree<'a> {
             format,
             parser_options,
             validation_options,
+            None,
+        )
+    }
+
+    /// Parse (and validate) input data as a YANG data tree, resolving anydata
+    /// payloads against a schema anchor.
+    ///
+    /// `anchor` is an absolute schema data path in JSON format (module names
+    /// as prefixes). The payload root of the first anydata instance is
+    /// resolved as the anchor node itself; other anydata instances are parsed
+    /// as without an anchor. The anchor does not change parsing or validation
+    /// options: without [`DataParserFlags::ANYDATA_STRICT`], payload nodes
+    /// that do not match it may be parsed as opaque nodes. Invalid or empty
+    /// anchors are rejected.
+    pub fn parse_string_with_anchor(
+        context: &'a Context,
+        data: impl AsRef<[u8]>,
+        format: DataFormat,
+        parser_options: DataParserFlags,
+        validation_options: DataValidationFlags,
+        anchor: &str,
+    ) -> Result<DataTree<'a>> {
+        DataTree::_parse_string(
+            context,
+            data,
+            format,
+            parser_options,
+            validation_options,
+            Some(anchor),
         )
     }
 
@@ -623,9 +655,11 @@ impl<'a> DataTree<'a> {
         format: DataFormat,
         parser_options: DataParserFlags,
         op: DataOperation,
+        anchor: Option<&str>,
     ) -> Result<DataTree<'a>> {
         let mut rnode = std::ptr::null_mut();
         let rnode_ptr = &mut rnode;
+        let anchor = anchor.map(|anchor| CString::new(anchor).unwrap());
         // Create input handler.
         let cdata;
         let mut ly_in = std::ptr::null_mut();
@@ -644,7 +678,7 @@ impl<'a> DataTree<'a> {
         }
 
         let ret = unsafe {
-            ffi::lyd_parse_op(
+            ffi::lyd_parse_op_with_anchor(
                 context.raw,
                 std::ptr::null_mut(),
                 ly_in,
@@ -653,6 +687,7 @@ impl<'a> DataTree<'a> {
                 parser_options.bits(),
                 rnode_ptr,
                 std::ptr::null_mut(),
+                anchor.as_ref().map_or(std::ptr::null(), |a| a.as_ptr()),
             )
         };
         unsafe { ffi::ly_in_free(ly_in, 0) };
@@ -672,7 +707,38 @@ impl<'a> DataTree<'a> {
         parser_options: DataParserFlags,
         op: DataOperation,
     ) -> Result<DataTree<'a>> {
-        DataTree::_parse_op_string(context, data, format, parser_options, op)
+        DataTree::_parse_op_string(
+            context,
+            data,
+            format,
+            parser_options,
+            op,
+            None,
+        )
+    }
+
+    /// Parse YANG data into an operation data tree, resolving the payload root
+    /// of the first anydata instance against a schema anchor.
+    ///
+    /// See [`DataTree::parse_string_with_anchor`] for the anchor semantics.
+    /// Note that operation parsing does not accept
+    /// [`DataParserFlags::ANYDATA_STRICT`].
+    pub fn parse_op_string_with_anchor(
+        context: &'a Context,
+        data: impl AsRef<[u8]>,
+        format: DataFormat,
+        parser_options: DataParserFlags,
+        op: DataOperation,
+        anchor: &str,
+    ) -> Result<DataTree<'a>> {
+        DataTree::_parse_op_string(
+            context,
+            data,
+            format,
+            parser_options,
+            op,
+            Some(anchor),
+        )
     }
 
     /// Returns a reference to the fist top-level data node, unless the data

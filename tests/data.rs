@@ -5,6 +5,7 @@ use yang6::data::{
     DataOperation, DataParserFlags, DataPrinterFlags, DataTree,
     DataTreeOwningRef, DataValidationFlags,
 };
+use yang6::schema::{SchemaInputFormat, SchemaModule};
 
 static SEARCH_DIR: &str = "./assets/yang/";
 static YANG_LIBRARY_FILE: &str = "./assets/data/lib.json";
@@ -515,6 +516,89 @@ fn data_merge() {
 
     dtree1.merge(&dtree2).expect("Failed to merge data trees");
     assert_data_eq!(&dtree1, &dtree_merge);
+}
+
+#[test]
+fn data_parse_anydata_with_anchor() {
+    let module = r#"module modanchor {
+        yang-version 1.1;
+        namespace "urn:test:modanchor";
+        prefix ma;
+        container message { anydata value; }
+        notification event { anydata value; }
+        container x {
+            leaf a { type uint8 { range "0"; } }
+            container y { leaf deep { type string; } }
+        }
+        leaf a { type uint8 { range "1"; } }
+    }"#;
+    let data = r#"{"modanchor:message":{"value":{"modanchor:a":0}}}"#;
+    let deep = r#"{"modanchor:message":{"value":{"modanchor:deep":"x"}}}"#;
+
+    let ctx = Context::new(ContextFlags::NO_YANGLIBRARY)
+        .expect("Failed to create context");
+    SchemaModule::parse_string(&ctx, module, SchemaInputFormat::YANG)
+        .expect("Failed to parse module");
+    let flags = |strict: bool| match strict {
+        true => DataParserFlags::ANYDATA_STRICT,
+        false => DataParserFlags::empty(),
+    };
+    let parse = |data: &str, anchor: Option<&str>, strict: bool| {
+        let vflags = DataValidationFlags::PRESENT;
+        match anchor {
+            Some(anchor) => DataTree::parse_string_with_anchor(
+                &ctx,
+                data,
+                DataFormat::JSON,
+                flags(strict),
+                vflags,
+                anchor,
+            ),
+            None => DataTree::parse_string(
+                &ctx,
+                data,
+                DataFormat::JSON,
+                flags(strict),
+                vflags,
+            ),
+        }
+    };
+
+    // "a" resolves to /x/a (range 0) instead of the top-level /a (range 1).
+    let dtree =
+        parse(data, Some("/modanchor:x/a"), true).expect("Failed to parse");
+    let json = dtree
+        .print_string(DataFormat::JSON, DataPrinterFlags::WITH_SIBLINGS)
+        .unwrap();
+    assert!(json.contains("\"a\": 0"));
+
+    assert!(parse(data, None, true).is_err());
+    assert!(parse(data, Some("/modanchor:x"), true).is_err());
+    assert!(parse(deep, Some("/modanchor:x/a"), true).is_err());
+    assert!(parse(deep, Some("/modanchor:x/y/deep"), true).is_ok());
+    assert!(parse(data, Some("/modanchor:missing"), true).is_err());
+    assert!(parse(data, Some(""), true).is_err());
+
+    // Without ANYDATA_STRICT the anchor still applies, mismatches go opaque.
+    assert!(parse(data, Some("/modanchor:x/a"), false).is_ok());
+    assert!(parse(data, Some("/modanchor:x"), false).is_ok());
+    assert!(parse(data, Some(""), false).is_err());
+
+    // lyd_parse_op() rejects ANYDATA_STRICT, so only check the anchor is used.
+    let notif = r#"{"modanchor:event":{"value":{"modanchor:a":0}}}"#;
+    let parse_op = |anchor: &str| {
+        DataTree::parse_op_string_with_anchor(
+            &ctx,
+            notif,
+            DataFormat::JSON,
+            DataParserFlags::STRICT,
+            DataOperation::NotificationYang,
+            anchor,
+        )
+    };
+    assert!(parse_op("/modanchor:x/a").is_ok());
+    assert!(parse_op("/modanchor:missing").is_err());
+    assert!(parse_op("").is_err());
 }
 
 #[cfg(feature = "cbor")]
