@@ -10880,6 +10880,19 @@ unsafe extern "C" {
     ) -> LY_ERR::Type;
 }
 unsafe extern "C" {
+    #[doc = " @brief Parse (and validate) data from the input handler as a YANG data tree with an optional anchor.\n\n With a NULL @p anchor, behaves identically to ::lyd_parse_data(). The first anydata instance encountered\n during parsing uses @p anchor to resolve its payload root. The payload contains the anchored node itself,\n not its children. The anchor does not enable ::LYD_PARSE_ANYDATA_STRICT; without it, unknown descendants\n can be parsed as opaque nodes. The existing parsing and validation options still apply;\n the anchor does not enable additional validation of the anydata contents. Anyxml parsing is unchanged.\n\n @param[in] ctx Context to connect with the tree being built here.\n @param[in] parent Optional parent to connect the parsed nodes to. If provided, the data are expected to describe\n a subtree of the YANG module instead of starting at the schema root.\n @param[in] in The input handle to provide the dumped data in the specified @p format to parse (and validate).\n @param[in] format Format of the input data to be parsed. Can be 0 to try to detect format from the input handler.\n @param[in] parse_options Options for parser, see @ref dataparseroptions.\n @param[in] validate_options Options for the validation phase, see @ref datavalidationoptions.\n @param[out] tree Full parsed data tree, note that NULL can be a valid tree. If @p parent is set, the first parsed child.\n @param[in] anchor Optional absolute schema data path in JSON format (module names as prefixes).\n The string is borrowed for the duration of this call. Invalid or empty paths are rejected.\n @return LY_SUCCESS in case of successful parsing (and validation).\n @return LY_ERR value in case of error. Additional error information can be obtained from the context using ly_err* functions."]
+    pub fn lyd_parse_data_with_anchor(
+        ctx: *const ly_ctx,
+        parent: *mut lyd_node,
+        in_: *mut ly_in,
+        format: LYD_FORMAT::Type,
+        parse_options: u32,
+        validate_options: u32,
+        tree: *mut *mut lyd_node,
+        anchor: *const ::std::os::raw::c_char,
+    ) -> LY_ERR::Type;
+}
+unsafe extern "C" {
     #[doc = " @brief Parse (and validate) input data as a YANG data tree.\n\n Wrapper around ::lyd_parse_data() hiding work with the input handler and some obscure options.\n\n @param[in] ctx Context to connect with the tree being built here.\n @param[in] data The input data in the specified @p format to parse (and validate).\n @param[in] format Format of the input data to be parsed.\n @param[in] parse_options Options for parser, see @ref dataparseroptions.\n @param[in] validate_options Options for the validation phase, see @ref datavalidationoptions.\n @param[out] tree Full parsed data tree, note that NULL can be a valid tree\n @return LY_SUCCESS in case of successful parsing (and validation).\n @return LY_ERR value in case of error. Additional error information can be obtained from the context using ly_err* functions."]
     pub fn lyd_parse_data_mem(
         ctx: *const ly_ctx,
@@ -10974,6 +10987,20 @@ unsafe extern "C" {
         parse_options: u32,
         tree: *mut *mut lyd_node,
         op: *mut *mut lyd_node,
+    ) -> LY_ERR::Type;
+}
+unsafe extern "C" {
+    #[doc = " @brief Parse operation data like ::lyd_parse_op(), with an optional anydata schema anchor.\n\n The first anydata instance uses @p anchor to resolve its payload root. The anchor does not change parsing options\n or validation. A NULL anchor is equivalent to ::lyd_parse_op().\n\n @param[in] ctx libyang context.\n @param[in] parent Optional parent to connect the parsed nodes to.\n @param[in] in Input handle to read the input from.\n @param[in] format Expected format of the data in @p in.\n @param[in] data_type Expected operation to parse (@ref datatype).\n @param[in] parse_options Parser options accepted by ::lyd_parse_op().\n @param[out] tree Optional full parsed data tree.\n @param[out] op Optional pointer to the operation node.\n @param[in] anchor Optional borrowed absolute schema data path in JSON format.\n @return LY_ERR value."]
+    pub fn lyd_parse_op_with_anchor(
+        ctx: *const ly_ctx,
+        parent: *mut lyd_node,
+        in_: *mut ly_in,
+        format: LYD_FORMAT::Type,
+        data_type: lyd_type::Type,
+        parse_options: u32,
+        tree: *mut *mut lyd_node,
+        op: *mut *mut lyd_node,
+        anchor: *const ::std::os::raw::c_char,
     ) -> LY_ERR::Type;
 }
 unsafe extern "C" {
